@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="SIEGFiscal.Application/SIEGFiscal.Application.csproj" />
+  <Project Path="SIEGFiscal.Domain/SIEGFiscal.Domain.csproj" />
+  <Project Path="SIEGFiscal.Infrastructure/SIEGFiscal.Infrastructure.csproj" />
+  <Project Path="SIEGFiscal/SIEGFiscal.API.csproj" />
+</Solution>

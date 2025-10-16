@@ -2,6 +2,10 @@
 
 public class FiscalDocumentDto
 {
+    public FiscalDocumentDto(object id, object key, object emitCnpj, object recipientCnpj, object uf, object emissionDate, object totalValue)
+    {
+    }
+
     public Guid Id { get; set; }
     public string? Key { get; set; }
     public string XmlHash { get; set; } = null!;

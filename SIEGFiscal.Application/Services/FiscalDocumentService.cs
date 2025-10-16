@@ -1,13 +1,14 @@
 ﻿using MassTransit;
 using SIEGFiscal.Application.DTOs;
 using SIEGFiscal.Application.Events;
+using SIEGFiscal.Application.Interfaces;
 using SIEGFiscal.Domain.Entities;
 using SIEGFiscal.Domain.Interfaces;
 using System.Xml.Linq;
 
 namespace SIEGFiscal.Application.Services;
 
-public class FiscalDocumentService(IFiscalDocumentRepository fiscalDocumentRepository, IPublishEndpoint publishEndpoint)
+public class FiscalDocumentService(IFiscalDocumentRepository fiscalDocumentRepository, IPublishEndpoint publishEndpoint) : IFiscalDocumentService
 {
     private readonly IFiscalDocumentRepository _fiscalDocumentRepository = fiscalDocumentRepository;
     private readonly IPublishEndpoint _publishEndpoint = publishEndpoint;
@@ -15,6 +16,44 @@ public class FiscalDocumentService(IFiscalDocumentRepository fiscalDocumentRepos
     public async Task<IEnumerable<FiscalDocumentDto>> GetAllFiscalDocumentsAsync()
     {
         return (IEnumerable<FiscalDocumentDto>)await _fiscalDocumentRepository.GetAllAsync();
+    }
+
+    public async Task<PagedResult<FiscalDocumentDto>> GetPagedAsync(int page, int pageSize, string? cnpj = null, string? uf = null, DateTime? startDate = null, DateTime? endDate = null)
+    {
+        var query = _fiscalDocumentRepository.Query();
+
+        if (!string.IsNullOrEmpty(cnpj))
+            query = query.Where(x => x.EmitCnpj == cnpj || x.RecipientCnpj == cnpj);
+
+        if (!string.IsNullOrEmpty(uf))
+            query = query.Where(x => x.Uf == uf);
+
+        if (startDate.HasValue)
+            query = query.Where(x => x.EmissionDate >= startDate.Value);
+
+        if (endDate.HasValue)
+            query = query.Where(x => x.EmissionDate <= endDate.Value);
+
+        var totalCount = query.Count();
+        var items = query.Skip((page - 1) * pageSize)
+                         .Take(pageSize)
+                         .Select(x => new FiscalDocumentDto(
+                             x.Id,
+                             x.Key,
+                             x.EmitCnpj,
+                             x.RecipientCnpj,
+                             x.Uf,
+                             x.EmissionDate,
+                             x.TotalValue))
+                         .ToList();
+
+        return new PagedResult<FiscalDocumentDto>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount
+        };
     }
 
     public async Task<ProcessResultDto> ProcessXmlAsync(Stream xmlStream)

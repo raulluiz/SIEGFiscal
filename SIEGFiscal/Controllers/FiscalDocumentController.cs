@@ -1,14 +1,15 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using SIEGFiscal.Application.DTOs;
+using SIEGFiscal.Application.Interfaces;
 using SIEGFiscal.Application.Services;
 
 namespace SIEGFiscal.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class FiscalDocumentController(FiscalDocumentService fiscalDocumentService) : ControllerBase
+public class FiscalDocumentController(IFiscalDocumentService fiscalDocumentService) : ControllerBase
 {
-    private readonly FiscalDocumentService _fiscalDocumentService = fiscalDocumentService;
+    private readonly IFiscalDocumentService _fiscalDocumentService = fiscalDocumentService;
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<FiscalDocumentDto>>> GetAll()
@@ -41,6 +42,19 @@ public class FiscalDocumentController(FiscalDocumentService fiscalDocumentServic
         var documents = await _fiscalDocumentService.GetAllFiscalDocumentsAsync();
 
         return Ok();
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetPaged(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? cnpj = null,
+            [FromQuery] string? uf = null,
+            [FromQuery] DateTime? startDate = null,
+            [FromQuery] DateTime? endDate = null)
+    {
+        var result = await _fiscalDocumentService.GetPagedAsync(page, pageSize, cnpj, uf, startDate, endDate);
+        return Ok(result);
     }
 
     //[HttpGet]

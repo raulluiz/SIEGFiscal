@@ -17,4 +17,9 @@ public class FiscalDocumentRepository : GenericRepository<FiscalDocument>, IFisc
     {
         return await _context.FiscalDocuments.FirstOrDefaultAsync(fd => fd.Key == key);
     }
+
+    public IQueryable<FiscalDocument> Query()
+    {
+        return _context.FiscalDocuments.AsQueryable();
+    }
 }

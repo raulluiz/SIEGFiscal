@@ -1,14 +1,15 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using SIEGFiscal.Domain.Interfaces;
+using SIEGFiscal.Infrastructure.Persistence;
 
 namespace SIEGFiscal.Infrastructure.Repository;
 
 public class GenericRepository<T> : IGenericRepository<T> where T : class
 {
-    private readonly DbContext _context;
+    private readonly AppDbContext _context;
     private readonly DbSet<T> _dbSet;
 
-    public GenericRepository(DbContext context)
+    public GenericRepository(AppDbContext context)
     {
         _context = context;
         _dbSet = _context.Set<T>();

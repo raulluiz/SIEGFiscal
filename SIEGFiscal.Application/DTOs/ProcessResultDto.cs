@@ -2,7 +2,8 @@
 
 public class ProcessResultDto
 {
-    public bool IsDuplicate { get; set; }
-    public Guid? Id { get; set; }
-    public Guid? ExistingId { get; set; }
+    public bool IsSuccess { get; set; }
+    public string? Message { get; set; }
+    public Guid? DocumentId { get; set; }
+
 }

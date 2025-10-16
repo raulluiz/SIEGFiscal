@@ -1,60 +1,63 @@
-﻿using SIEGFiscal.Application.DTOs;
+﻿using MassTransit;
+using SIEGFiscal.Application.DTOs;
+using SIEGFiscal.Application.Events;
 using SIEGFiscal.Domain.Entities;
 using SIEGFiscal.Domain.Interfaces;
 using System.Xml.Linq;
 
 namespace SIEGFiscal.Application.Services;
 
-public class FiscalDocumentService
+public class FiscalDocumentService(IFiscalDocumentRepository fiscalDocumentRepository, IPublishEndpoint publishEndpoint)
 {
-    private readonly IFiscalDocumentRepository _fiscalDocumentRepository;
-    public FiscalDocumentService(IFiscalDocumentRepository fiscalDocumentRepository)
-    {
-        _fiscalDocumentRepository = fiscalDocumentRepository;
-    }
+    private readonly IFiscalDocumentRepository _fiscalDocumentRepository = fiscalDocumentRepository;
+    private readonly IPublishEndpoint _publishEndpoint = publishEndpoint;
 
     public async Task<IEnumerable<FiscalDocumentDto>> GetAllFiscalDocumentsAsync()
     {
         return (IEnumerable<FiscalDocumentDto>)await _fiscalDocumentRepository.GetAllAsync();
     }
 
-    public async Task<bool> ProcessXmlAsync(Stream xmlStream)
+    public async Task<ProcessResultDto> ProcessXmlAsync(Stream xmlStream)
     {
-
-        // Load an XDocument from a file
         XDocument loadedDoc = XDocument.Load(xmlStream);
 
-        // Query the XDocument using LINQ
-        var items = loadedDoc.Descendants("Item")
-                            .Select(e => new
-                            {
-                                Key = e.Attribute("chNFe")?.Value,
-                                XmlHash = e.Attribute("xmlHash")?.Value,
-                                EmissionDate = e.Attribute("emissionDate")?.Value,
-                                EmitCnpj = e.Attribute("emitCnpj")?.Value,
-                                RecipientCnpj = e.Attribute("recipientCnpj")?.Value,
-                                Uf = e.Attribute("cUF")?.Value,
-                                TotalValue = e.Attribute("totalValue")?.Value,
-                                Content = e.Value
-                            });
+        XNamespace ns = "http://www.portalfiscal.inf.br/nfe";
 
-        foreach (var item in items)
+        var infNFe = loadedDoc.Descendants(ns + "infNFe").FirstOrDefault();
+        if (infNFe == null)
+            return new ProcessResultDto { IsSuccess = false, Message = "Documento inválido!", DocumentId = null };
+
+        var chaveNFe = (string)infNFe.Attribute("Id") ?? string.Empty;
+        var dhEmi = (string)infNFe.Element(ns + "ide")?.Element(ns + "dhEmi") ?? string.Empty;
+        var emitCnpj = (string)infNFe.Element(ns + "emit")?.Element(ns + "CNPJ") ?? string.Empty;
+        var destCnpj = (string)infNFe.Element(ns + "dest")?.Element(ns + "CNPJ") ?? string.Empty;
+        var cUF = (string)infNFe.Element(ns + "ide")?.Element(ns + "cUF") ?? string.Empty;
+        var totalValue = (string)infNFe.Element(ns + "total")?
+                                     .Element(ns + "ICMSTot")?
+                                     .Element(ns + "vNF") ?? string.Empty;
+
+        FiscalDocument fiscalDocument = new FiscalDocument
         {
-            FiscalDocument dto = new FiscalDocument
-            {
-                Id = Guid.NewGuid(),
-                Key = item.Key,
-                XmlHash = item.XmlHash ?? string.Empty,
-                EmissionDate = DateTime.Parse(item.EmissionDate ?? DateTime.MinValue.ToString()),
-                EmitCnpj = item.EmitCnpj,
-                RecipientCnpj = item.RecipientCnpj,
-                Uf = item.Uf,
-                TotalValue = decimal.Parse(item.TotalValue ?? "0"),
-            };
-            await _fiscalDocumentRepository.AddAsync(dto);
-        }
+            Id = Guid.NewGuid(),
+            Key = chaveNFe.Replace("NFe", ""),
+            XmlHash = string.Empty,
+            EmissionDate = !string.IsNullOrEmpty(dhEmi) ? DateTime.Parse(dhEmi) : DateTime.MinValue,
+            EmitCnpj = emitCnpj,
+            RecipientCnpj = destCnpj,
+            Uf = cUF,
+            TotalValue = decimal.TryParse(totalValue, out var v) ? v : 0m
+        };
 
-        return true;
+        var existingDocument = await _fiscalDocumentRepository.GetByKeyAsync(fiscalDocument.Key);
+        if (existingDocument != null)
+            return new ProcessResultDto { IsSuccess = false, Message = "Documento já processado.", DocumentId = existingDocument.Id };
+
+        await _fiscalDocumentRepository.AddAsync(fiscalDocument);
+
+        var newEvent = new DocumentProcessedEvent(fiscalDocument.Id, fiscalDocument.Key, DateTime.UtcNow);
+        await _publishEndpoint.Publish(newEvent);
+
+        return new ProcessResultDto { IsSuccess = true, Message = "Documento incluido com sucesso!.", DocumentId = fiscalDocument.Id }; ;
     }
 }
 //public Guid Id { get; set; }

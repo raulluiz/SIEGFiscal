@@ -1,4 +1,7 @@
+using MassTransit;
 using Microsoft.OpenApi.Models;
+using SIEGFiscal.Application.Consumers;
+using SIEGFiscal.Application.Events;
 using SIEGFiscal.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +16,27 @@ builder.Services.AddSwaggerGen(c => {
 });
 
 builder.Services.AddInfrastructure(builder.Configuration);
+
+builder.Services.AddMassTransit(x =>
+{
+    // Futuramente, seu consumidor será registrado aqui.
+     x.AddConsumer<DocumentProcessedConsumer>();
+
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        cfg.Host("localhost", "/", h => {
+            h.Username("guest");
+            h.Password("guest");
+        });
+
+        cfg.ReceiveEndpoint("documento-processado", e =>
+        {
+            // Política de retry: 5 tentativas com intervalo exponencial
+            e.UseMessageRetry(r => r.Interval(5, TimeSpan.FromSeconds(5)));
+            e.ConfigureConsumer<DocumentProcessedConsumer>(context);
+        });
+    });
+});
 
 var app = builder.Build();
 
